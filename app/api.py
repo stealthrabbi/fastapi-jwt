@@ -2,7 +2,7 @@ from fastapi import FastAPI, Body, Depends, Response, status
 
 from app.model import PostSchema, UserSchema, UserLoginSchema
 from app.auth.auth_bearer import JWTBearer
-from app.auth.auth_handler import signJWT
+from app.auth.auth_handler import signJWT, decodeJWT
 
 
 posts = [
@@ -30,6 +30,10 @@ def check_user(data: UserLoginSchema):
             return True
     return False
 
+async def get_current_user(token: str = Depends(JWTBearer())):
+    user = decodeJWT(token)
+    print("user: " + str(user))
+    return user
 
 # route handlers
 
@@ -57,8 +61,13 @@ async def get_single_post(id: int) -> dict:
             }
 
 
-@app.post("/posts", dependencies=[Depends(JWTBearer())], tags=["posts"])
-async def add_post(post: PostSchema) -> dict:
+# @app.post("/posts", dependencies=[Depends(JWTBearer())], tags=["posts"])
+# MPF - changed this to include the current user, so that the user ID can be known / printed
+# this can be expanded for like "Get current user with role X". That function would return None
+# if the current user doesn't have that role.
+@app.post("/posts", tags=["posts"])
+async def add_post(post: PostSchema, current_user = Depends(get_current_user)) -> dict:
+    print("making a post for user: " + str(current_user))
     post.id = len(posts) + 1
     posts.append(post.dict())
     return {
@@ -77,7 +86,13 @@ async def user_login(response: Response, user: UserLoginSchema = Body(...)):
     if check_user(user):
         return signJWT(user.email)
         # MPF I added this change here for setting 403 check
-        response.status_code = status.HTTP_403_FORBIDDEN
+    response.status_code = status.HTTP_403_FORBIDDEN
     return {
         "error": "Wrong login details!"
     }
+
+@app.get("/users/me", tags=["user"])
+async def get_me_user(response: Response, current_user = Depends(get_current_user)):
+    return current_user
+
+
