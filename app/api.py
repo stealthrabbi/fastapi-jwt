@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Body, Depends
+from fastapi import FastAPI, Body, Depends, Response, status
 
 from app.model import PostSchema, UserSchema, UserLoginSchema
 from app.auth.auth_bearer import JWTBearer
@@ -21,6 +21,10 @@ app = FastAPI()
 # helpers
 
 def check_user(data: UserLoginSchema):
+    # MPF TODO - this is is using a list of users in RAM -- should use LDAP
+    # THis is where we'd make a call to LDAP to authenticate
+    # We should only log in on the login call. On all other API calls, we 
+    # add a dependency on the JWT Bearer, and we check the token for validity / expiration
     for user in users:
         if user.email == data.email and user.password == data.password:
             return True
@@ -69,9 +73,11 @@ async def create_user(user: UserSchema = Body(...)):
 
 
 @app.post("/user/login", tags=["user"])
-async def user_login(user: UserLoginSchema = Body(...)):
+async def user_login(response: Response, user: UserLoginSchema = Body(...)):
     if check_user(user):
         return signJWT(user.email)
+        # MPF I added this change here for setting 403 check
+        response.status_code = status.HTTP_403_FORBIDDEN
     return {
         "error": "Wrong login details!"
     }
